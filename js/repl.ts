@@ -57,11 +57,13 @@ export async function replLoop(): Promise<void> {
 
   const historyFile = "deno_history.txt";
   const rid = startRepl(historyFile);
+  const lines: string[] = [];
 
-  let code = "";
+  let line = "";
   while (true) {
     try {
-      code = await readBlock(rid, "> ", "  ");
+      line = await readBlock(rid, "> ", "  ");
+      lines.push(line);
     } catch (err) {
       if (err.message === "EOF") {
         break;
@@ -69,20 +71,29 @@ export async function replLoop(): Promise<void> {
       console.error(err);
       exit(1);
     }
-    if (!code) {
+    if (!line) {
       continue;
-    } else if (code.trim() === ".exit") {
+    } else if (line.trim() === ".exit") {
       break;
     }
 
-    evaluate(code);
+    evaluate(lines);
   }
 
   close(rid);
 }
 
-function evaluate(code: string): void {
+function buildCode(lines: string[]): string {
+  const lineLen = lines.length;
+  const lastLine = lines[lineLen - 1].replace(/\"/g, '\\"');
+  const joinedLines = lines.slice(0, lineLen - 1).join(";");
+  return `(function () { ${joinedLines}; return eval("${lastLine}"); })();`;
+}
+
+function evaluate(lines: string[]): void {
   try {
+    const code = buildCode(lines);
+    console.log(code);
     const result = eval.call(window, code); // FIXME use a new scope.
     console.log(result);
   } catch (err) {
@@ -91,6 +102,7 @@ function evaluate(code: string): void {
     } else {
       console.error("Thrown:", err);
     }
+    lines.pop();
   }
 }
 
